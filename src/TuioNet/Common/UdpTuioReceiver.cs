@@ -9,6 +9,8 @@ namespace TuioNet.Common
     {
         private readonly int _port;
 
+        private bool isUdpClientActive;
+
         internal UdpTuioReceiver(int port, bool isAutoProcess) : base(isAutoProcess)
         {
             _port = port;
@@ -19,17 +21,23 @@ namespace TuioNet.Common
         /// </summary>
         internal override void Connect()
         {
+            if (isUdpClientActive) return;
+
             CancellationToken cancellationToken = CancellationTokenSource.Token;
             Task.Run(async () =>
             {
                 using (var udpClient = new UdpClient(_port))
                 {
-                    IsConnected = true;
+                    isUdpClientActive = true;
+
                     while (true)
                     {
                         try
                         {
                             var receivedResults = await udpClient.ReceiveAsync();
+
+                            if (!IsConnected && udpClient.Available > 0) IsConnected = true;
+
                             OnBuffer(receivedResults.Buffer, receivedResults.Buffer.Length);
                         }
                         catch (Exception)
@@ -39,7 +47,12 @@ namespace TuioNet.Common
                         cancellationToken.ThrowIfCancellationRequested();
                     }
                 }
+
+                isUdpClientActive = false;
+                IsConnected = false;
             });
+
+            isUdpClientActive = false;
             IsConnected = false;
         }
     }
